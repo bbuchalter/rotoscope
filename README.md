@@ -53,8 +53,8 @@ IO,write,instance,example/dog.rb,11,IO,puts,instance
 ## API
 
 - [Public Class Methods](#public-class-methods)
-  - [`trace`](#rotoscopecallloggertracedest-blacklist-)
-  - [`new`](#rotoscopecallloggernewdest-blacklist-)
+  - [`trace`](#rotoscopecallloggertracedest-blacklist-whitelist)
+  - [`new`](#rotoscopecallloggernewdest-blacklist-whitelist)
 - [Public Instance Methods](#public-instance-methods)
   - [`trace`](#rotoscopecallloggertraceblock)
   - [`start_trace`](#rotoscopecallloggerstart_trace)
@@ -68,9 +68,14 @@ IO,write,instance,example/dog.rb,11,IO,puts,instance
 
 ### Public Class Methods
 
-#### `Rotoscope::CallLogger::trace(dest, blacklist: [])`
+#### `Rotoscope::CallLogger::trace(dest, blacklist: [], whitelist: [])`
 
-Writes all calls of methods to `dest`, except for those whose filepath contains any entry in `blacklist`. `dest` is either a filename or an `IO`. Methods invoked at the top of the trace will have a caller entity of `<ROOT>` and a caller method name of `<UNKNOWN>`.
+Writes all calls of methods to `dest`, except for those whose filepath contains any entry in `blacklist`. If a `whitelist` is present, only calls originating from a matching file path will be included. Both `blacklist` and `whitelist` are expected to be either:
+* An array of strings representing regexs (example: `["/.gem/", '/.rubies/"]`), which will be passed to [Regexp.union](http://ruby-doc.org/core-2.2.0/Regexp.html#method-c-union)
+* A Regexp
+* nil or an empty array (no filter)
+
+`dest` is either a filename or an `IO`. Methods invoked at the top of the trace will have a caller entity of `<ROOT>` and a caller method name of `<UNKNOWN>`.
 
 ```ruby
 Rotoscope::CallLogger.trace(dest) { |rs| ... }
@@ -78,13 +83,13 @@ Rotoscope::CallLogger.trace(dest) { |rs| ... }
 Rotoscope::CallLogger.trace(dest, blacklist: ["/.gem/"]) { |rs| ... }
 ```
 
-#### `Rotoscope::CallLogger::new(dest, blacklist: [])`
+#### `Rotoscope::CallLogger::new(dest, blacklist: [], whitelist: [])`
 
 Same interface as `Rotoscope::CallLogger::trace`, but returns a `Rotoscope::CallLogger` instance, allowing fine-grain control via `Rotoscope::CallLogger#start_trace` and `Rotoscope::CallLogger#stop_trace`.
 ```ruby
 rs = Rotoscope::CallLogger.new(dest)
 # or...
-rs = Rotoscope::CallLogger.new(dest, blacklist: ["/.gem/"])
+rs = Rotoscope::CallLogger.new(dest, whitelist: ["/my_app_name/"])
 ```
 
 ---

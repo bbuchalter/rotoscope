@@ -235,6 +235,19 @@ class RotoscopeTest < MiniTest::Test
     ], parse_and_normalize(contents))
   end
 
+  def test_trace_ignores_calls_unless_whitelisted
+    contents = rotoscope_trace(whitelist: ['rotoscope_test.rb']) do
+      foo = FixtureOuter.new
+      foo.do_work
+    end
+
+    assert_equal([
+      { entity: "FixtureOuter", method_name: "new", method_level: "class", filepath: "/rotoscope_test.rb", lineno: -1, caller_entity: "<ROOT>", caller_method_name: "<UNKNOWN>", caller_method_level: "<UNKNOWN>" },
+      { entity: "FixtureOuter", method_name: "initialize", method_level: "instance", filepath: "/rotoscope_test.rb", lineno: -1, caller_entity: "FixtureOuter", caller_method_name: "new", caller_method_level: "class" },
+      { entity: "FixtureOuter", method_name: "do_work", method_level: "instance", filepath: "/rotoscope_test.rb", lineno: -1, caller_entity: "<ROOT>", caller_method_name: "<UNKNOWN>", caller_method_level: "<UNKNOWN>" },
+    ], parse_and_normalize(contents))
+  end
+
   def test_trace_ignores_writes_in_fork
     contents = rotoscope_trace do |rotoscope|
       fork do
@@ -299,6 +312,20 @@ class RotoscopeTest < MiniTest::Test
   def test_trace_flatten_with_blacklisted_caller
     foo = FixtureOuter.new
     contents = rotoscope_trace(blacklist: ['/rotoscope_test.rb']) do
+      foo.do_work
+    end
+
+    assert_equal([
+      { entity: "FixtureInner", method_name: "do_work", method_level: "instance", filepath: "/fixture_outer.rb", lineno: -1,
+        caller_entity: "FixtureOuter", caller_method_name: "do_work", caller_method_level: "instance" },
+      { entity: "FixtureInner", method_name: "sum", method_level: "instance", filepath: "/fixture_inner.rb", lineno: -1,
+        caller_entity: "FixtureInner", caller_method_name: "do_work", caller_method_level: "instance" },
+    ], parse_and_normalize(contents))
+  end
+
+  def test_trace_flatten_with_whitelisted_caller
+    foo = FixtureOuter.new
+    contents = rotoscope_trace(whitelist: ['/fixture_outer.rb', '/fixture_inner.rb']) do
       foo.do_work
     end
 
@@ -384,6 +411,15 @@ class RotoscopeTest < MiniTest::Test
 
   def test_block_defined_methods_in_blacklist
     contents = rotoscope_trace(blacklist: [MONADIFY_PATH]) { Example.apply("my value!") }
+
+    assert_equal([
+      { entity: "Example", method_name: "apply", method_level: "class", filepath: "/rotoscope_test.rb", lineno: -1, caller_entity: "<ROOT>", caller_method_name: "<UNKNOWN>", caller_method_level: "<UNKNOWN>" },
+      { entity: "Example", method_name: "monad", method_level: "class", filepath: "/rotoscope_test.rb", lineno: -1, caller_entity: "Example", caller_method_name: "apply", caller_method_level: "class" },
+    ], parse_and_normalize(contents))
+  end
+
+  def test_block_defined_methods_in_whitelist
+    contents = rotoscope_trace(whitelist: ['/rotoscope_test.rb']) { Example.apply("my value!") }
 
     assert_equal([
       { entity: "Example", method_name: "apply", method_level: "class", filepath: "/rotoscope_test.rb", lineno: -1, caller_entity: "<ROOT>", caller_method_name: "<UNKNOWN>", caller_method_level: "<UNKNOWN>" },
@@ -503,8 +539,8 @@ class RotoscopeTest < MiniTest::Test
     end
   end
 
-  def rotoscope_trace(blacklist: [])
-    Rotoscope::CallLogger.trace(@logfile, blacklist: blacklist) { |rotoscope| yield rotoscope }
+  def rotoscope_trace(blacklist: [], whitelist: [])
+    Rotoscope::CallLogger.trace(@logfile, blacklist: blacklist, whitelist: whitelist) { |rotoscope| yield rotoscope }
     File.read(@logfile)
   end
 

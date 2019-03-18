@@ -5,8 +5,8 @@ require 'csv'
 class Rotoscope
   class CallLogger
     class << self
-      def trace(dest, blacklist: [])
-        rs = new(dest, blacklist: blacklist)
+      def trace(dest, blacklist: [], whitelist: [])
+        rs = new(dest, blacklist: blacklist, whitelist: whitelist)
         rs.trace { yield rs }
         rs
       ensure
@@ -16,13 +16,32 @@ class Rotoscope
 
     HEADER = "entity,caller_entity,filepath,lineno,method_name,method_level,caller_method_name,caller_method_level\n"
 
-    attr_reader :io, :blacklist
+    attr_reader :io, :blacklist, :whitelist
 
-    def initialize(output = nil, blacklist: nil)
-      unless blacklist.is_a?(Regexp)
-        blacklist = Regexp.union(blacklist || [])
+    def initialize(output = nil, blacklist: nil, whitelist: nil)
+      if blacklist
+        if blacklist.is_a?(Regexp)
+          @blacklist = blacklist
+        elsif blacklist.is_a?(Array)
+          @blacklist = Regexp.union(blacklist)
+        else
+          ArgumentError.new('Expcted nil, array of strings, or a Regexp for blacklist')
+        end
+      else
+        @blacklist = Regexp.union([]) # no filter
       end
-      @blacklist = blacklist
+
+      if whitelist && whitelist != []
+        if whitelist.is_a?(Regexp)
+          @whitelist = whitelist
+        elsif whitelist.is_a?(Array)
+          @whitelist = Regexp.union(whitelist)
+        else
+          ArgumentError.new('Expcted nil, array of strings, or a Regexp for whitelist')
+        end
+      else
+        @whitelist = nil # no filter
+      end
 
       if output.is_a?(String)
         @io = File.open(output, 'w')
@@ -90,6 +109,7 @@ class Rotoscope
     def log_call(call)
       caller_path = call.caller_path || ''
       return if blacklist.match(caller_path)
+      return if whitelist && !whitelist.match(caller_path)
       return if self == call.receiver
 
       if call.caller_method_name.nil?
